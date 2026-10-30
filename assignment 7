@@ -1,0 +1,1048 @@
+{
+  "cells": [
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "view-in-github",
+        "colab_type": "text"
+      },
+      "source": [
+        "<a href=\"https://colab.research.google.com/github/krishkumarwork3-beep/ucs420/blob/2nd/Copy_of_UCS420_LA9_Starter.ipynb\" target=\"_parent\"><img src=\"https://colab.research.google.com/assets/colab-badge.svg\" alt=\"Open In Colab\"/></a>"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "_cBgQntj5RhP"
+      },
+      "source": [
+        "\\# UCS420 Lab Assignment 7 - NLP Text Preprocessing\n",
+        "Enter your roll number and name, then run all cells."
+      ],
+      "id": "_cBgQntj5RhP"
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "cTkCKa1n5RhR"
+      },
+      "source": [
+        "ROLL_NO = 1024170184         # <-- your full roll number\n",
+        "NAME = \"Krish Kumar\"            # <-- your name\n",
+        "\n",
+        "import nltk\n",
+        "for pkg in [\"punkt\", \"punkt_tab\", \"stopwords\", \"wordnet\", \"omw-1.4\",\n",
+        "            \"averaged_perceptron_tagger\", \"averaged_perceptron_tagger_eng\"]:\n",
+        "    nltk.download(pkg, quiet=True)\n",
+        "assert ROLL_NO > 0 and NAME, \"Enter your roll number and name first\""
+      ],
+      "execution_count": null,
+      "outputs": [],
+      "id": "cTkCKa1n5RhR"
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "MOH61Omx5RhS"
+      },
+      "source": [
+        "### Dataset generator — do not modify"
+      ],
+      "id": "MOH61Omx5RhS"
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "BzXO5ESF5RhS"
+      },
+      "source": [
+        "import random, hashlib\n",
+        "import pandas as pd\n",
+        "\n",
+        "def generate_dataset(roll_no):\n",
+        "    \"\"\"Return (DataFrame of tickets, focus ticket IDs, fingerprint) for a roll number. Do not modify.\"\"\"\n",
+        "    rng = random.Random(int(roll_no))\n",
+        "\n",
+        "    subjects = [(\"LMS\", [\"LMS\", \"lms\"]), (\"Wi-Fi\", [\"Wi-Fi\", \"WiFi\", \"wifi\"]), (\"VPN\", [\"VPN\"]),\n",
+        "                (\"email\", [\"email\", \"e-mail\"]), (\"password\", [\"password\"]), (\"portal\", [\"student portal\"]),\n",
+        "                (\"projector\", [\"projector\"]), (\"laptop\", [\"laptop\"]), (\"MATLAB\", [\"MATLAB\", \"Matlab\"]),\n",
+        "                (\"Python\", [\"Python\"]), (\"printer\", [\"printer\"]), (\"server\", [\"server\"])]\n",
+        "    actions = [\"is not working\", \"keeps disconnecting\", \"failed to open\", \"is running slowly\",\n",
+        "               \"crashes while opening\", \"stopped responding\", \"is showing an error\", \"was working yesterday\",\n",
+        "               \"has stopped syncing\", \"keeps asking for login\"]\n",
+        "    user_actions = [\"cannot access\", \"can't open\", \"couldn't connect to\", \"am unable to use\",\n",
+        "                    \"tried restarting\", \"was locked out of\", \"keep getting logged out of\", \"reinstalled\"]\n",
+        "    contexts = [\"after resetting my password\", \"during the lab\", \"on my laptop\", \"since yesterday\",\n",
+        "                \"after the latest update\", \"when I use mobile hotspot\", \"before the assignment deadline\",\n",
+        "                \"while uploading the file\", \"after restarting the system\", \"when connected to campus Wi-Fi\"]\n",
+        "    endings = [\"Please help.\", \"Can you check this?\", \"I have tried several times!\", \"It worked yesterday.\",\n",
+        "               \"I don't know what changed.\", \"The same problem occurs again.\", \"Is there another solution?\",\n",
+        "               \"It works on another computer.\", \"This is urgent.\", \"Please resolve it.\"]\n",
+        "    challenges = {\n",
+        "        \"negation\": [\"The Wi-Fi works, but the VPN doesn't.\", \"Why isn't the portal opening?\",\n",
+        "                     \"I can't login and I didn't change anything.\", \"It's not the laptop; it's the server.\",\n",
+        "                     \"Nothing works and nobody has replied.\", \"The printer won't print; it isn't jammed.\"],\n",
+        "        \"numbers\": [\"Python 3.12 was installed yesterday.\", \"The file is 95.5% uploaded.\",\n",
+        "                    \"Error code 0x80070005 appears.\", \"I need Windows 11 by 5.30 p.m. today.\",\n",
+        "                    \"Only 2 of 30 PCs boot after 3.5 hours.\", \"Version 2.0.1 crashes at 99%.\"],\n",
+        "        \"identifiers\": [\"Email me at helpdesk@university.edu.\", \"See https://lms.thapar.edu/help for details.\",\n",
+        "                        \"My roll no. is 1023-03-021.\", \"Ticket #4521 is still open.\",\n",
+        "                        \"Call me on +91 98765 43210 or 0175-239-3201.\",\n",
+        "                        \"Write to it.helpdesk@thapar.edu or visit www.thapar.edu/it.\"],\n",
+        "        \"punctuation\": [\"I tried again... still no response!!!\", \"The LMS says 'Not Submitted'.\",\n",
+        "                        \"Dr. Rao's lab PC (No. 14) is down.\", \"Is it fixed?? Pls reply ASAP :(\",\n",
+        "                        \"The state-of-the-art lab (Lab-3) is closed.\", \"Re-installing didn't help; log-in still fails!\"],\n",
+        "    }\n",
+        "\n",
+        "    tickets = []\n",
+        "    for _ in range(8 + int(roll_no) % 5):\n",
+        "        _, variants = rng.choice(subjects)\n",
+        "        s = rng.choice(variants)\n",
+        "        template = rng.randrange(3)\n",
+        "        if template == 0:\n",
+        "            text = f\"{s} {rng.choice(actions)} {rng.choice(contexts)}. {rng.choice(endings)}\"\n",
+        "        elif template == 1:\n",
+        "            text = f\"I {rng.choice(user_actions)} the {s} {rng.choice(contexts)}. {rng.choice(endings)}\"\n",
+        "        else:\n",
+        "            text = f\"The {s} {rng.choice(actions)}. {rng.choice(endings)}\"\n",
+        "        tickets.append(text[0].upper() + text[1:])\n",
+        "    for category in [\"negation\", \"numbers\", \"identifiers\", \"punctuation\"]:\n",
+        "        tickets.append(rng.choice(challenges[category]))\n",
+        "    rng.shuffle(tickets)\n",
+        "\n",
+        "    df = pd.DataFrame({\"Ticket_ID\": [f\"T{i + 1:02d}\" for i in range(len(tickets))], \"Ticket_Text\": tickets})\n",
+        "    focus = [f\"T{i:02d}\" for i in sorted(rng.sample(range(1, len(tickets) + 1), 2))]\n",
+        "    fingerprint = hashlib.md5((\"|\".join(tickets) + str(int(roll_no))).encode()).hexdigest()[:8].upper()\n",
+        "    return df, focus, fingerprint"
+      ],
+      "execution_count": null,
+      "outputs": [],
+      "id": "BzXO5ESF5RhS"
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "5pz3w2_95RhT"
+      },
+      "source": [
+        "### Preprocessing pipeline — do not modify"
+      ],
+      "id": "5pz3w2_95RhT"
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "inHK3Nhz5RhT"
+      },
+      "source": [
+        "import string\n",
+        "from nltk.tokenize import sent_tokenize, word_tokenize\n",
+        "from nltk.corpus import stopwords\n",
+        "\n",
+        "STOP = set(stopwords.words(\"english\"))\n",
+        "\n",
+        "def is_punct(token):\n",
+        "    \"\"\"A token is punctuation if EVERY character in it is in string.punctuation (e.g. '.', '...', '``', \"''\").\"\"\"\n",
+        "    return all(ch in string.punctuation for ch in token)\n",
+        "\n",
+        "def process_ticket(text):\n",
+        "    \"\"\"The official pipeline. Returns sentences, lowercase tokens, punctuation, stopwords and final tokens.\"\"\"\n",
+        "    sentences = sent_tokenize(text)\n",
+        "    tokens = [t.lower() for s in sentences for t in word_tokenize(s)]\n",
+        "    punct = [t for t in tokens if is_punct(t)]\n",
+        "    stops = [t for t in tokens if t in STOP]\n",
+        "    final = [t for t in tokens if not is_punct(t) and t not in STOP]\n",
+        "    return {\"sentences\": sentences, \"tokens\": tokens, \"punct\": punct, \"stops\": stops, \"final\": final}"
+      ],
+      "execution_count": null,
+      "outputs": [],
+      "id": "inHK3Nhz5RhT"
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "WmWzZwK85RhT",
+        "outputId": "1ae28f6d-80d5-4523-d09a-38234d9d2216",
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        }
+      },
+      "source": [
+        "df, FOCUS, FINGERPRINT = generate_dataset(ROLL_NO)\n",
+        "print(f\"Roll number: {ROLL_NO}   Name: {NAME}   Fingerprint: {FINGERPRINT}   Tickets: {len(df)}\\n\")\n",
+        "print(df.to_string(index=False))\n",
+        "df.to_csv(f\"{ROLL_NO}_generated_dataset.csv\", index=False)"
+      ],
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Roll number: 1024170184   Name: Krish Kumar   Fingerprint: 9FDD3B7E   Tickets: 16\n",
+            "\n",
+            "Ticket_ID                                                                          Ticket_Text\n",
+            "      T01 I am unable to use the projector after the latest update. I don't know what changed.\n",
+            "      T02                                                          My roll no. is 1023-03-021.\n",
+            "      T03     I couldn't connect to the Matlab when I use mobile hotspot. It worked yesterday.\n",
+            "      T04                                            The printer won't print; it isn't jammed.\n",
+            "      T05                                                        The LMS says 'Not Submitted'.\n",
+            "      T06                          Email is running slowly since yesterday. Please resolve it.\n",
+            "      T07                             The password keeps asking for login. Can you check this?\n",
+            "      T08                                  The MATLAB has stopped syncing. Can you check this?\n",
+            "      T09                         Server keeps disconnecting on my laptop. Can you check this?\n",
+            "      T10  LMS has stopped syncing before the assignment deadline. I have tried several times!\n",
+            "      T11                             The password was working yesterday. It worked yesterday.\n",
+            "      T12             Wifi is showing an error when I use mobile hotspot. It worked yesterday.\n",
+            "      T13                   I keep getting logged out of the VPN since yesterday. Please help.\n",
+            "      T14                                                I need Windows 11 by 5.30 p.m. today.\n",
+            "      T15                                       The Matlab is not working. Can you check this?\n",
+            "      T16                               The MATLAB crashes while opening. It worked yesterday.\n"
+          ]
+        }
+      ],
+      "id": "WmWzZwK85RhT"
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "lD4HYTbG5RhT"
+      },
+      "source": [
+        "---\n",
+        "## Q1. Preprocessing pipeline\n",
+        "Run process_ticket() on every ticket and show one table with, per ticket: sentences, tokens, punctuation tokens, stopwords, unique tokens and final tokens, plus a TOTAL row."
+      ],
+      "id": "lD4HYTbG5RhT"
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "rMCemnE85RhU",
+        "outputId": "738b03e0-a835-4bbd-d488-15b1cad9dc61",
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        }
+      },
+      "source": [
+        "rows = []\n",
+        "for tid, text in zip(df[\"Ticket_ID\"], df[\"Ticket_Text\"]):\n",
+        "    r = process_ticket(text)\n",
+        "    rows.append({\n",
+        "        \"Ticket_ID\": tid,\n",
+        "        \"Sentences\": len(r[\"sentences\"]),\n",
+        "        \"Tokens\": len(r[\"tokens\"]),\n",
+        "        \"Punctuation\": len(r[\"punct\"]),\n",
+        "        \"Stopwords\": len(r[\"stops\"]),\n",
+        "        \"Unique_Tokens\": len(set(r[\"tokens\"])),\n",
+        "        \"Final_Tokens\": len(r[\"final\"]),\n",
+        "    })\n",
+        "\n",
+        "q1 = pd.DataFrame(rows)\n",
+        "\n",
+        "# TOTAL row: sum of each column\n",
+        "total = q1.drop(columns=\"Ticket_ID\").sum()\n",
+        "q1 = pd.concat([q1, pd.DataFrame([{\"Ticket_ID\": \"TOTAL\", **total.to_dict()}])],\n",
+        "               ignore_index=True)\n",
+        "\n",
+        "print(q1.to_string(index=False))\n",
+        "\n",
+        "# Show details for one selected ticket\n",
+        "sel = \"T03\"   # change to any ticket ID\n",
+        "text = df.loc[df[\"Ticket_ID\"] == sel, \"Ticket_Text\"].iloc[0]\n",
+        "r = process_ticket(text)\n",
+        "print(f\"Ticket {sel}: {text}\\n\")\n",
+        "print(\"Tokens      :\", r[\"tokens\"])\n",
+        "print(\"Punctuation :\", r[\"punct\"])\n",
+        "print(\"Stopwords   :\", r[\"stops\"])\n",
+        "print(\"Final tokens:\", r[\"final\"])"
+      ],
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Ticket_ID  Sentences  Tokens  Punctuation  Stopwords  Unique_Tokens  Final_Tokens\n",
+            "      T01          2      19            2          9             16             8\n",
+            "      T02          2       7            2          3              6             2\n",
+            "      T03          2      17            2          6             15             9\n",
+            "      T04          1      11            2          3             10             6\n",
+            "      T05          1       7            2          1              7             4\n",
+            "      T06          2      11            2          2             10             7\n",
+            "      T07          2      12            2          5             12             5\n",
+            "      T08          2      11            2          5             11             4\n",
+            "      T09          2      12            2          5             12             5\n",
+            "      T10          2      15            2          5             15             8\n",
+            "      T11          2      10            2          3              8             5\n",
+            "      T12          2      15            2          5             14             8\n",
+            "      T13          2      14            2          4             13             8\n",
+            "      T14          1       9            1          2              9             6\n",
+            "      T15          2      11            2          6             11             3\n",
+            "      T16          2      10            2          3              9             5\n",
+            "    TOTAL         29     191           31         67            178            93\n",
+            "Ticket T03: I couldn't connect to the Matlab when I use mobile hotspot. It worked yesterday.\n",
+            "\n",
+            "Tokens      : ['i', 'could', \"n't\", 'connect', 'to', 'the', 'matlab', 'when', 'i', 'use', 'mobile', 'hotspot', '.', 'it', 'worked', 'yesterday', '.']\n",
+            "Punctuation : ['.', '.']\n",
+            "Stopwords   : ['i', 'to', 'the', 'when', 'i', 'it']\n",
+            "Final tokens: ['could', \"n't\", 'connect', 'matlab', 'use', 'mobile', 'hotspot', 'worked', 'yesterday']\n"
+          ]
+        }
+      ],
+      "id": "rMCemnE85RhU"
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "nhHYDHl05RhU"
+      },
+      "source": [
+        "**Observe:** Which final tokens in your data are not real words (e.g. n't, 's, ca)? Where do they come from?\n",
+        "\n",
+        "*Your answer:*The final tokens that are not real words are fragments created by word_tokenize, which splits contractions into two pieces. For example, “couldn’t” becomes could + n't, and “can’t” becomes ca + n't; “won’t” becomes wo + n't, and “Dr. Rao’s” gives 's. The pipeline only removes tokens made entirely of punctuation and tokens in the NLTK stopword list. n't contains a letter, so is_punct doesn’t remove it, and it isn’t in the stopword list, so it survives into the final tokens. could also survives because it isn’t in the list either. In T03, n't is the clear example.\n"
+      ],
+      "id": "nhHYDHl05RhU"
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "bq0i9lfa5RhU"
+      },
+      "source": [
+        "---\n",
+        "## Q2. Regular expressions\n",
+        "On your raw tickets, use re.findall to extract: words longer than 5 letters; all numbers (keep 95.5 and 2.0.1 whole); capitalized words; words starting with a vowel. Then use re.sub to replace emails with <EMAIL>, URLs with <URL> and phone numbers with <PHONE>. Your patterns must also work on TEST_LINES (given in the notebook)."
+      ],
+      "id": "bq0i9lfa5RhU"
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "GgvXHHx65RhU",
+        "outputId": "a9a881ab-7fa9-4872-9aba-6b1c27626998",
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        }
+      },
+      "source": [
+        "TEST_LINES = [\n",
+        "    \"Mail it.helpdesk@thapar.edu or a.b-c@dept.univ.ac.in; visit https://lms.thapar.edu/help or www.thapar.edu/it.\",\n",
+        "    \"Call +91 98765 43210, +91-98765-43210 or 0175-239-3201. Version 2.0.1 is 95.5% done; fee Rs 1,250.\",\n",
+        "    \"The state-of-the-art lab isn't open; log-in at 5.30 p.m. didn't work.\",\n",
+        "]\n",
+        "\n",
+        "import re\n",
+        "\n",
+        "# ---------- patterns ----------\n",
+        "LONG_WORDS = r\"\\b[A-Za-z]{6,}\\b\"                     # words longer than 5 letters\n",
+        "NUMBERS    = r\"\\d+(?:[.,]\\d+)*\"                      # 95.5, 2.0.1, 1,250, 5.30 stay whole\n",
+        "CAPITAL    = r\"\\b[A-Z][A-Za-z]*\\b\"                   # capitalized words (incl. MATLAB, LMS)\n",
+        "VOWEL      = r\"\\b[aeiouAEIOU][A-Za-z]*\\b\"            # words starting with a vowel\n",
+        "\n",
+        "EMAIL = r\"\\b[\\w.+-]+@[\\w-]+(?:\\.[\\w-]+)+\\b\"\n",
+        "URL   = r\"(?:https?://|www\\.)[\\w\\-./~%?=&#]*[\\w/]\"   # stops before a trailing '.'\n",
+        "PHONE = (r\"(?<!\\d)(?:\\+91[\\s-]?)?\\d{5}[\\s-]?\\d{5}(?!\\d)\"   # +91 98765 43210 / +91-98765-43210\n",
+        "         r\"|(?<!\\d)0\\d{2,4}-\\d{3}-\\d{4}(?!\\d)\")             # 0175-239-3201\n",
+        "\n",
+        "def extract(text):\n",
+        "    return {\n",
+        "        \"long_words\": re.findall(LONG_WORDS, text),\n",
+        "        \"numbers\":    re.findall(NUMBERS, text),\n",
+        "        \"capitalized\": re.findall(CAPITAL, text),\n",
+        "        \"vowel_words\": re.findall(VOWEL, text),\n",
+        "    }\n",
+        "\n",
+        "def mask(text):\n",
+        "    # order matters: emails first so the URL pattern can't eat part of them\n",
+        "    text = re.sub(EMAIL, \"<EMAIL>\", text)\n",
+        "    text = re.sub(URL, \"<URL>\", text)\n",
+        "    text = re.sub(PHONE, \"<PHONE>\", text)\n",
+        "    return text\n",
+        "\n",
+        "# ---------- 1) TEST_LINES ----------\n",
+        "print(\"=== TEST_LINES ===\")\n",
+        "for line in TEST_LINES:\n",
+        "    print(\"\\nLINE   :\", line)\n",
+        "    for k, v in extract(line).items():\n",
+        "        print(f\"{k:12}:\", v)\n",
+        "    print(\"MASKED :\", mask(line))\n",
+        "\n",
+        "# ---------- 2) Raw tickets ----------\n",
+        "print(\"\\n=== RAW TICKETS ===\")\n",
+        "for tid, text in zip(df[\"Ticket_ID\"], df[\"Ticket_Text\"]):\n",
+        "    print(f\"\\n{tid}: {text}\")\n",
+        "    for k, v in extract(text).items():\n",
+        "        print(f\"  {k:12}:\", v)\n",
+        "    print(\"  masked      :\", mask(text))\n",
+        "\n",
+        "# ---------- Observe: capitalized only because they start a sentence ----------\n",
+        "all_caps, sent_start = 0, 0\n",
+        "for text in df[\"Ticket_Text\"]:\n",
+        "    all_caps   += len(re.findall(CAPITAL, text))\n",
+        "    sent_start += len(re.findall(r\"(?:^|(?<=[.!?])\\s+)([A-Z][A-Za-z]*)\", text))\n",
+        "print(f\"\\nCapitalized words: {all_caps}, of which sentence-initial: {sent_start}\")"
+      ],
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "=== TEST_LINES ===\n",
+            "\n",
+            "LINE   : Mail it.helpdesk@thapar.edu or a.b-c@dept.univ.ac.in; visit https://lms.thapar.edu/help or www.thapar.edu/it.\n",
+            "long_words  : ['helpdesk', 'thapar', 'thapar', 'thapar']\n",
+            "numbers     : []\n",
+            "capitalized : ['Mail']\n",
+            "vowel_words : ['it', 'edu', 'or', 'a', 'univ', 'ac', 'in', 'edu', 'or', 'edu', 'it']\n",
+            "MASKED : Mail <EMAIL> or <EMAIL>; visit <URL> or <URL>.\n",
+            "\n",
+            "LINE   : Call +91 98765 43210, +91-98765-43210 or 0175-239-3201. Version 2.0.1 is 95.5% done; fee Rs 1,250.\n",
+            "long_words  : ['Version']\n",
+            "numbers     : ['91', '98765', '43210', '91', '98765', '43210', '0175', '239', '3201', '2.0.1', '95.5', '1,250']\n",
+            "capitalized : ['Call', 'Version', 'Rs']\n",
+            "vowel_words : ['or', 'is']\n",
+            "MASKED : Call <PHONE>, <PHONE> or <PHONE>. Version 2.0.1 is 95.5% done; fee Rs 1,250.\n",
+            "\n",
+            "LINE   : The state-of-the-art lab isn't open; log-in at 5.30 p.m. didn't work.\n",
+            "long_words  : []\n",
+            "numbers     : ['5.30']\n",
+            "capitalized : ['The']\n",
+            "vowel_words : ['of', 'art', 'isn', 'open', 'in', 'at']\n",
+            "MASKED : The state-of-the-art lab isn't open; log-in at 5.30 p.m. didn't work.\n",
+            "\n",
+            "=== RAW TICKETS ===\n",
+            "\n",
+            "T01: I am unable to use the projector after the latest update. I don't know what changed.\n",
+            "  long_words  : ['unable', 'projector', 'latest', 'update', 'changed']\n",
+            "  numbers     : []\n",
+            "  capitalized : ['I', 'I']\n",
+            "  vowel_words : ['I', 'am', 'unable', 'use', 'after', 'update', 'I']\n",
+            "  masked      : I am unable to use the projector after the latest update. I don't know what changed.\n",
+            "\n",
+            "T02: My roll no. is 1023-03-021.\n",
+            "  long_words  : []\n",
+            "  numbers     : ['1023', '03', '021']\n",
+            "  capitalized : ['My']\n",
+            "  vowel_words : ['is']\n",
+            "  masked      : My roll no. is 1023-03-021.\n",
+            "\n",
+            "T03: I couldn't connect to the Matlab when I use mobile hotspot. It worked yesterday.\n",
+            "  long_words  : ['couldn', 'connect', 'Matlab', 'mobile', 'hotspot', 'worked', 'yesterday']\n",
+            "  numbers     : []\n",
+            "  capitalized : ['I', 'Matlab', 'I', 'It']\n",
+            "  vowel_words : ['I', 'I', 'use', 'It']\n",
+            "  masked      : I couldn't connect to the Matlab when I use mobile hotspot. It worked yesterday.\n",
+            "\n",
+            "T04: The printer won't print; it isn't jammed.\n",
+            "  long_words  : ['printer', 'jammed']\n",
+            "  numbers     : []\n",
+            "  capitalized : ['The']\n",
+            "  vowel_words : ['it', 'isn']\n",
+            "  masked      : The printer won't print; it isn't jammed.\n",
+            "\n",
+            "T05: The LMS says 'Not Submitted'.\n",
+            "  long_words  : ['Submitted']\n",
+            "  numbers     : []\n",
+            "  capitalized : ['The', 'LMS', 'Not', 'Submitted']\n",
+            "  vowel_words : []\n",
+            "  masked      : The LMS says 'Not Submitted'.\n",
+            "\n",
+            "T06: Email is running slowly since yesterday. Please resolve it.\n",
+            "  long_words  : ['running', 'slowly', 'yesterday', 'Please', 'resolve']\n",
+            "  numbers     : []\n",
+            "  capitalized : ['Email', 'Please']\n",
+            "  vowel_words : ['Email', 'is', 'it']\n",
+            "  masked      : Email is running slowly since yesterday. Please resolve it.\n",
+            "\n",
+            "T07: The password keeps asking for login. Can you check this?\n",
+            "  long_words  : ['password', 'asking']\n",
+            "  numbers     : []\n",
+            "  capitalized : ['The', 'Can']\n",
+            "  vowel_words : ['asking']\n",
+            "  masked      : The password keeps asking for login. Can you check this?\n",
+            "\n",
+            "T08: The MATLAB has stopped syncing. Can you check this?\n",
+            "  long_words  : ['MATLAB', 'stopped', 'syncing']\n",
+            "  numbers     : []\n",
+            "  capitalized : ['The', 'MATLAB', 'Can']\n",
+            "  vowel_words : []\n",
+            "  masked      : The MATLAB has stopped syncing. Can you check this?\n",
+            "\n",
+            "T09: Server keeps disconnecting on my laptop. Can you check this?\n",
+            "  long_words  : ['Server', 'disconnecting', 'laptop']\n",
+            "  numbers     : []\n",
+            "  capitalized : ['Server', 'Can']\n",
+            "  vowel_words : ['on']\n",
+            "  masked      : Server keeps disconnecting on my laptop. Can you check this?\n",
+            "\n",
+            "T10: LMS has stopped syncing before the assignment deadline. I have tried several times!\n",
+            "  long_words  : ['stopped', 'syncing', 'before', 'assignment', 'deadline', 'several']\n",
+            "  numbers     : []\n",
+            "  capitalized : ['LMS', 'I']\n",
+            "  vowel_words : ['assignment', 'I']\n",
+            "  masked      : LMS has stopped syncing before the assignment deadline. I have tried several times!\n",
+            "\n",
+            "T11: The password was working yesterday. It worked yesterday.\n",
+            "  long_words  : ['password', 'working', 'yesterday', 'worked', 'yesterday']\n",
+            "  numbers     : []\n",
+            "  capitalized : ['The', 'It']\n",
+            "  vowel_words : ['It']\n",
+            "  masked      : The password was working yesterday. It worked yesterday.\n",
+            "\n",
+            "T12: Wifi is showing an error when I use mobile hotspot. It worked yesterday.\n",
+            "  long_words  : ['showing', 'mobile', 'hotspot', 'worked', 'yesterday']\n",
+            "  numbers     : []\n",
+            "  capitalized : ['Wifi', 'I', 'It']\n",
+            "  vowel_words : ['is', 'an', 'error', 'I', 'use', 'It']\n",
+            "  masked      : Wifi is showing an error when I use mobile hotspot. It worked yesterday.\n",
+            "\n",
+            "T13: I keep getting logged out of the VPN since yesterday. Please help.\n",
+            "  long_words  : ['getting', 'logged', 'yesterday', 'Please']\n",
+            "  numbers     : []\n",
+            "  capitalized : ['I', 'VPN', 'Please']\n",
+            "  vowel_words : ['I', 'out', 'of']\n",
+            "  masked      : I keep getting logged out of the VPN since yesterday. Please help.\n",
+            "\n",
+            "T14: I need Windows 11 by 5.30 p.m. today.\n",
+            "  long_words  : ['Windows']\n",
+            "  numbers     : ['11', '5.30']\n",
+            "  capitalized : ['I', 'Windows']\n",
+            "  vowel_words : ['I']\n",
+            "  masked      : I need Windows 11 by 5.30 p.m. today.\n",
+            "\n",
+            "T15: The Matlab is not working. Can you check this?\n",
+            "  long_words  : ['Matlab', 'working']\n",
+            "  numbers     : []\n",
+            "  capitalized : ['The', 'Matlab', 'Can']\n",
+            "  vowel_words : ['is']\n",
+            "  masked      : The Matlab is not working. Can you check this?\n",
+            "\n",
+            "T16: The MATLAB crashes while opening. It worked yesterday.\n",
+            "  long_words  : ['MATLAB', 'crashes', 'opening', 'worked', 'yesterday']\n",
+            "  numbers     : []\n",
+            "  capitalized : ['The', 'MATLAB', 'It']\n",
+            "  vowel_words : ['opening', 'It']\n",
+            "  masked      : The MATLAB crashes while opening. It worked yesterday.\n",
+            "\n",
+            "Capitalized words: 39, of which sentence-initial: 28\n"
+          ]
+        }
+      ],
+      "id": "GgvXHHx65RhU"
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "f3C8ES0K5RhU"
+      },
+      "source": [
+        "**Observe:** How many of your capitalized words are capitalized only because they start a sentence?\n",
+        "\n",
+        "*Your answer:*Of the 39 capitalized words, 28 are capitalized only because they begin a sentence (e.g. The, It, Can, Please). The remaining 11 are capitalized for other reasons: the pronoun “I”, acronyms and product names such as LMS, VPN, MATLAB, Windows, and quoted text like ‘Not Submitted’. This shows that capitalization is a weak signal for proper nouns, since most capitalized words here are just sentence starters."
+      ],
+      "id": "f3C8ES0K5RhU"
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "jbGXM7la5RhV"
+      },
+      "source": [
+        "---\n",
+        "## Q3. Custom tokenizer\n",
+        "Write my_tokenize(text) with one RegexpTokenizer pattern that keeps contractions (isn't), hyphenated words (Wi-Fi, state-of-the-art), decimals and versions (95.5, 2.0.1), emails, URLs and phone numbers as single tokens. Run it on TEST_LINES and on your tickets, and compare with word_tokenize."
+      ],
+      "id": "jbGXM7la5RhV"
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "QTTdk2bi5RhV",
+        "outputId": "e3b3ee5e-ecf5-4ab6-8899-f0551e518c02",
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        }
+      },
+      "source": [
+        "import re\n",
+        "from nltk.tokenize import RegexpTokenizer, word_tokenize\n",
+        "\n",
+        "# One pattern, alternatives tried in order (most specific first).\n",
+        "# Non-capturing groups only, so RegexpTokenizer returns whole matches.\n",
+        "PATTERN = r\"\"\"(?x)\n",
+        "    (?:[\\w.+-]+@[\\w-]+(?:\\.[\\w-]+)+)                       # email\n",
+        "  | (?:(?:https?://|www\\.)[\\w\\-./~%?=&#]*[\\w/])            # URL\n",
+        "  | (?:(?<!\\d)(?:\\+91[\\s-]?)?\\d{5}[\\s-]?\\d{5}(?!\\d))       # phone: +91 98765 43210 / +91-98765-43210\n",
+        "  | (?:(?<!\\d)0\\d{2,4}-\\d{3}-\\d{4}(?!\\d))                  # phone: 0175-239-3201\n",
+        "  | (?:\\d+(?:[.,]\\d+)+)                                    # decimals, versions, 1,250 (95.5, 2.0.1)\n",
+        "  | (?:[A-Za-z]+(?:['\\-][A-Za-z]+)+)                       # contractions + hyphenated (isn't, Wi-Fi, state-of-the-art)\n",
+        "  | (?:\\w+)                                                # plain words / integers\n",
+        "  | (?:[^\\w\\s])                                            # any other single punctuation char\n",
+        "\"\"\"\n",
+        "\n",
+        "_tok = RegexpTokenizer(PATTERN)\n",
+        "\n",
+        "def my_tokenize(text):\n",
+        "    return _tok.tokenize(text)\n",
+        "\n",
+        "# ---------- 1) TEST_LINES ----------\n",
+        "print(\"=== TEST_LINES ===\")\n",
+        "for line in TEST_LINES:\n",
+        "    print(\"\\nLINE        :\", line)\n",
+        "    print(\"my_tokenize :\", my_tokenize(line))\n",
+        "    print(\"word_tokenize:\", word_tokenize(line))\n",
+        "\n",
+        "# ---------- 2) Tickets ----------\n",
+        "print(\"\\n=== TICKETS ===\")\n",
+        "diff_ids = []\n",
+        "for tid, text in zip(df[\"Ticket_ID\"], df[\"Ticket_Text\"]):\n",
+        "    mine, nltk_t = my_tokenize(text), word_tokenize(text)\n",
+        "    if mine != nltk_t:\n",
+        "        diff_ids.append(tid)\n",
+        "        print(f\"\\n{tid}: {text}\")\n",
+        "        print(\"  my_tokenize  :\", mine)\n",
+        "        print(\"  word_tokenize:\", nltk_t)\n",
+        "        print(\"  only in mine :\", [t for t in mine if t not in nltk_t])\n",
+        "        print(\"  only in nltk :\", [t for t in nltk_t if t not in mine])\n",
+        "\n",
+        "print(f\"\\nTickets tokenized differently: {len(diff_ids)} of {len(df)}\")\n",
+        "print(\"IDs:\", diff_ids)"
+      ],
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "=== TEST_LINES ===\n",
+            "\n",
+            "LINE        : Mail it.helpdesk@thapar.edu or a.b-c@dept.univ.ac.in; visit https://lms.thapar.edu/help or www.thapar.edu/it.\n",
+            "my_tokenize : ['Mail', 'it.helpdesk@thapar.edu', 'or', 'a.b-c@dept.univ.ac.in', ';', 'visit', 'https://lms.thapar.edu/help', 'or', 'www.thapar.edu/it', '.']\n",
+            "word_tokenize: ['Mail', 'it.helpdesk', '@', 'thapar.edu', 'or', 'a.b-c', '@', 'dept.univ.ac.in', ';', 'visit', 'https', ':', '//lms.thapar.edu/help', 'or', 'www.thapar.edu/it', '.']\n",
+            "\n",
+            "LINE        : Call +91 98765 43210, +91-98765-43210 or 0175-239-3201. Version 2.0.1 is 95.5% done; fee Rs 1,250.\n",
+            "my_tokenize : ['Call', '+91 98765 43210', ',', '+91-98765-43210', 'or', '0175-239-3201', '.', 'Version', '2.0.1', 'is', '95.5', '%', 'done', ';', 'fee', 'Rs', '1,250', '.']\n",
+            "word_tokenize: ['Call', '+91', '98765', '43210', ',', '+91-98765-43210', 'or', '0175-239-3201', '.', 'Version', '2.0.1', 'is', '95.5', '%', 'done', ';', 'fee', 'Rs', '1,250', '.']\n",
+            "\n",
+            "LINE        : The state-of-the-art lab isn't open; log-in at 5.30 p.m. didn't work.\n",
+            "my_tokenize : ['The', 'state-of-the-art', 'lab', \"isn't\", 'open', ';', 'log-in', 'at', '5.30', 'p', '.', 'm', '.', \"didn't\", 'work', '.']\n",
+            "word_tokenize: ['The', 'state-of-the-art', 'lab', 'is', \"n't\", 'open', ';', 'log-in', 'at', '5.30', 'p.m.', 'did', \"n't\", 'work', '.']\n",
+            "\n",
+            "=== TICKETS ===\n",
+            "\n",
+            "T01: I am unable to use the projector after the latest update. I don't know what changed.\n",
+            "  my_tokenize  : ['I', 'am', 'unable', 'to', 'use', 'the', 'projector', 'after', 'the', 'latest', 'update', '.', 'I', \"don't\", 'know', 'what', 'changed', '.']\n",
+            "  word_tokenize: ['I', 'am', 'unable', 'to', 'use', 'the', 'projector', 'after', 'the', 'latest', 'update', '.', 'I', 'do', \"n't\", 'know', 'what', 'changed', '.']\n",
+            "  only in mine : [\"don't\"]\n",
+            "  only in nltk : ['do', \"n't\"]\n",
+            "\n",
+            "T02: My roll no. is 1023-03-021.\n",
+            "  my_tokenize  : ['My', 'roll', 'no', '.', 'is', '1023', '-', '03', '-', '021', '.']\n",
+            "  word_tokenize: ['My', 'roll', 'no', '.', 'is', '1023-03-021', '.']\n",
+            "  only in mine : ['1023', '-', '03', '-', '021']\n",
+            "  only in nltk : ['1023-03-021']\n",
+            "\n",
+            "T03: I couldn't connect to the Matlab when I use mobile hotspot. It worked yesterday.\n",
+            "  my_tokenize  : ['I', \"couldn't\", 'connect', 'to', 'the', 'Matlab', 'when', 'I', 'use', 'mobile', 'hotspot', '.', 'It', 'worked', 'yesterday', '.']\n",
+            "  word_tokenize: ['I', 'could', \"n't\", 'connect', 'to', 'the', 'Matlab', 'when', 'I', 'use', 'mobile', 'hotspot', '.', 'It', 'worked', 'yesterday', '.']\n",
+            "  only in mine : [\"couldn't\"]\n",
+            "  only in nltk : ['could', \"n't\"]\n",
+            "\n",
+            "T04: The printer won't print; it isn't jammed.\n",
+            "  my_tokenize  : ['The', 'printer', \"won't\", 'print', ';', 'it', \"isn't\", 'jammed', '.']\n",
+            "  word_tokenize: ['The', 'printer', 'wo', \"n't\", 'print', ';', 'it', 'is', \"n't\", 'jammed', '.']\n",
+            "  only in mine : [\"won't\", \"isn't\"]\n",
+            "  only in nltk : ['wo', \"n't\", 'is', \"n't\"]\n",
+            "\n",
+            "T05: The LMS says 'Not Submitted'.\n",
+            "  my_tokenize  : ['The', 'LMS', 'says', \"'\", 'Not', 'Submitted', \"'\", '.']\n",
+            "  word_tokenize: ['The', 'LMS', 'says', \"'Not\", 'Submitted', \"'\", '.']\n",
+            "  only in mine : ['Not']\n",
+            "  only in nltk : [\"'Not\"]\n",
+            "\n",
+            "T14: I need Windows 11 by 5.30 p.m. today.\n",
+            "  my_tokenize  : ['I', 'need', 'Windows', '11', 'by', '5.30', 'p', '.', 'm', '.', 'today', '.']\n",
+            "  word_tokenize: ['I', 'need', 'Windows', '11', 'by', '5.30', 'p.m.', 'today', '.']\n",
+            "  only in mine : ['p', 'm']\n",
+            "  only in nltk : ['p.m.']\n",
+            "\n",
+            "Tickets tokenized differently: 6 of 16\n",
+            "IDs: ['T01', 'T02', 'T03', 'T04', 'T05', 'T14']\n"
+          ]
+        }
+      ],
+      "id": "QTTdk2bi5RhV"
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "semAQSwv5RhV"
+      },
+      "source": [
+        "**Observe:** How many of your tickets are tokenized differently by my_tokenize and word_tokenize?\n",
+        "\n",
+        "*Your answer:*6 of the 16 tickets are tokenized differently by my_tokenize and word_tokenize. The differences come from four causes:\n",
+        "\n",
+        "Contractions (T01, T03, T04): word_tokenize splits them into two tokens (couldn't becomes could + n't, won't becomes wo + n't, isn't becomes is + n't), while my pattern keeps them whole.\n",
+        "Abbreviations (T14): word_tokenize keeps p.m. as one token, while mine splits it into p, ., m, ..\n",
+        "Hyphenated identifiers (T02): word_tokenize keeps the roll number 1023-03-021 whole, while mine splits it into 1023, -, 03, -, 021.\n",
+        "Quotes (T05): word_tokenize attaches the opening quote to the next word ('Not), while mine separates the quote mark (', Not)."
+      ],
+      "id": "semAQSwv5RhV"
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "lmWGLHRE5RhV"
+      },
+      "source": [
+        "---\n",
+        "## Q4. Stemming and lemmatization\n",
+        "On your unique final tokens, compare PorterStemmer, LancasterStemmer, a RegexpStemmer with a suffix rule you choose after looking at your own words, and WordNetLemmatizer with POS tags from nltk.pos_tag. Show a table of the words where the outputs differ."
+      ],
+      "id": "lmWGLHRE5RhV"
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "VrgSwGCQ5RhV",
+        "outputId": "b56d6671-4b03-41d3-8b94-e5b4076d64cc",
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        }
+      },
+      "source": [
+        "import nltk\n",
+        "from nltk.stem import PorterStemmer, LancasterStemmer, RegexpStemmer, WordNetLemmatizer\n",
+        "from nltk.corpus import wordnet\n",
+        "\n",
+        "# ---------- unique final tokens across all tickets ----------\n",
+        "final_tokens = []\n",
+        "for text in df[\"Ticket_Text\"]:\n",
+        "    final_tokens.extend(process_ticket(text)[\"final\"])\n",
+        "unique_final = sorted(set(final_tokens))\n",
+        "print(\"Unique final tokens:\", len(unique_final))\n",
+        "print(unique_final)\n",
+        "\n",
+        "# ---------- stemmers / lemmatizer ----------\n",
+        "porter    = PorterStemmer()\n",
+        "lancaster = LancasterStemmer()\n",
+        "# Suffix rule: pick after inspecting your own words (see print above).\n",
+        "# min=4 stops short words like \"is\", \"bus\" from being chopped.\n",
+        "regexp    = RegexpStemmer(r\"(ing|ed|es|s|ly)$\", min=4)\n",
+        "lemm      = WordNetLemmatizer()\n",
+        "\n",
+        "def to_wn_pos(tag):\n",
+        "    if tag.startswith(\"J\"): return wordnet.ADJ\n",
+        "    if tag.startswith(\"V\"): return wordnet.VERB\n",
+        "    if tag.startswith(\"R\"): return wordnet.ADV\n",
+        "    return wordnet.NOUN\n",
+        "\n",
+        "# POS-tag each word (tagging single words loses context, but works for a unique-word list)\n",
+        "tagged = nltk.pos_tag(unique_final)\n",
+        "\n",
+        "rows = []\n",
+        "for word, tag in tagged:\n",
+        "    rows.append({\n",
+        "        \"Word\": word,\n",
+        "        \"POS\": tag,\n",
+        "        \"Porter\": porter.stem(word),\n",
+        "        \"Lancaster\": lancaster.stem(word),\n",
+        "        \"Regexp\": regexp.stem(word),\n",
+        "        \"Lemma\": lemm.lemmatize(word, to_wn_pos(tag)),\n",
+        "    })\n",
+        "\n",
+        "q4 = pd.DataFrame(rows)\n",
+        "\n",
+        "# keep only words where the four outputs are not all identical\n",
+        "differ = q4[q4[[\"Porter\", \"Lancaster\", \"Regexp\", \"Lemma\"]].nunique(axis=1) > 1]\n",
+        "print(f\"\\nWords where outputs differ: {len(differ)} of {len(q4)}\\n\")\n",
+        "print(differ.to_string(index=False))"
+      ],
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Unique final tokens: 63\n",
+            "[\"'not\", '1023-03-021', '11', '5.30', 'asking', 'assignment', 'changed', 'check', 'connect', 'could', 'crashes', 'deadline', 'disconnecting', 'email', 'error', 'getting', 'help', 'hotspot', 'jammed', 'keep', 'keeps', 'know', 'laptop', 'latest', 'lms', 'logged', 'login', 'matlab', 'mobile', \"n't\", 'need', 'opening', 'p.m.', 'password', 'please', 'print', 'printer', 'projector', 'resolve', 'roll', 'running', 'says', 'server', 'several', 'showing', 'since', 'slowly', 'stopped', 'submitted', 'syncing', 'times', 'today', 'tried', 'unable', 'update', 'use', 'vpn', 'wifi', 'windows', 'wo', 'worked', 'working', 'yesterday']\n",
+            "\n",
+            "Words where outputs differ: 32 of 63\n",
+            "\n",
+            "      Word POS    Porter Lancaster     Regexp      Lemma\n",
+            "assignment  NN    assign    assign assignment assignment\n",
+            "   changed VBD     chang     chang      chang     change\n",
+            "  deadline  JJ   deadlin   deadlin   deadline   deadline\n",
+            "     error  NN     error        er      error      error\n",
+            "   getting VBG       get       get       gett        get\n",
+            "    jammed VBD       jam       jam       jamm        jam\n",
+            "    latest JJS    latest    latest     latest       late\n",
+            "       lms NNS        lm       lms        lms         lm\n",
+            "    logged VBD       log       log       logg        log\n",
+            "    mobile VBP     mobil      mobl     mobile     mobile\n",
+            "      need  VB      need       nee         ne       need\n",
+            "   opening VBG      open        op       open       open\n",
+            "    please  NN     pleas     pleas     please     please\n",
+            "   printer  NN   printer     print    printer    printer\n",
+            " projector  NN projector   project  projector  projector\n",
+            "   resolve VBP    resolv    resolv    resolve    resolve\n",
+            "      roll  NN      roll       rol       roll       roll\n",
+            "   running VBG       run       run       runn        run\n",
+            "    server  NN    server      serv     server     server\n",
+            "   several  JJ     sever       sev    several    several\n",
+            "     since  IN      sinc      sint      since      since\n",
+            "    slowly  RB    slowli      slow       slow     slowly\n",
+            "   stopped VBN      stop      stop      stopp       stop\n",
+            " submitted VBN    submit    submit    submitt     submit\n",
+            "   syncing VBG      sync      synt       sync       sync\n",
+            "     times NNS      time       tim        tim       time\n",
+            "     tried VBD       tri       tri        tri        try\n",
+            "    unable  JJ     unabl        un     unable     unable\n",
+            "    update  JJ     updat       upd     update     update\n",
+            "       use  NN       use        us        use        use\n",
+            "      wifi  NN      wifi       wif       wifi       wifi\n",
+            "   windows VBZ    window    window     window    windows\n"
+          ]
+        }
+      ],
+      "id": "VrgSwGCQ5RhV"
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "oUnW3Dxf5RhV"
+      },
+      "source": [
+        "**Observe:** Give one over-stemming and one under-stemming example from your table.\n",
+        "\n",
+        "*Your answer:*Over-stemming: Lancaster reduces projector to project, and unable to un, which cuts too much and changes or destroys the meaning. Under-stemming: the Regexp stemmer reduces running to runn and getting to gett. It removes -ing but leaves the doubled consonant, so these stems do not match run and get."
+      ],
+      "id": "oUnW3Dxf5RhV"
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "-xttt63W5RhV"
+      },
+      "source": [
+        "---\n",
+        "## Q5. Corpus statistics\n",
+        "Compute tokens, unique tokens and TTR for S1 (all tokens), S2 (no punctuation), S3 (final tokens) and S4 (S3 after Porter). Print the top 10 words of S1 and S3, plot log(rank) vs log(frequency) for S3, and print the top 5 bigrams of S1 and S3."
+      ],
+      "id": "-xttt63W5RhV"
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "y8nvlaBD5RhV",
+        "outputId": "dcc46d7c-877d-41a0-8fb9-cbcd8c9ee3ca",
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 1000
+        }
+      },
+      "source": [
+        "import math\n",
+        "from collections import Counter\n",
+        "import matplotlib.pyplot as plt\n",
+        "from nltk.util import bigrams\n",
+        "from nltk.stem import PorterStemmer\n",
+        "\n",
+        "porter = PorterStemmer()\n",
+        "\n",
+        "# ---------- build the four corpora (all tickets concatenated) ----------\n",
+        "S1, S2, S3 = [], [], []\n",
+        "for text in df[\"Ticket_Text\"]:\n",
+        "    r = process_ticket(text)\n",
+        "    S1.extend(r[\"tokens\"])                              # all lowercase tokens\n",
+        "    S2.extend(t for t in r[\"tokens\"] if t not in r[\"punct\"])   # no punctuation\n",
+        "    S3.extend(r[\"final\"])                               # no punctuation, no stopwords\n",
+        "S4 = [porter.stem(t) for t in S3]                       # S3 after Porter\n",
+        "\n",
+        "# S2: safer to filter with is_punct directly (avoids list-membership quirks)\n",
+        "S2 = [t for t in S1 if not is_punct(t)]\n",
+        "\n",
+        "corpora = {\"S1 (all tokens)\": S1, \"S2 (no punct)\": S2,\n",
+        "           \"S3 (final)\": S3, \"S4 (S3 + Porter)\": S4}\n",
+        "\n",
+        "# ---------- tokens, unique tokens, TTR ----------\n",
+        "rows = []\n",
+        "for name, toks in corpora.items():\n",
+        "    n, v = len(toks), len(set(toks))\n",
+        "    rows.append({\"Corpus\": name, \"Tokens\": n, \"Unique\": v, \"TTR\": round(v / n, 4)})\n",
+        "stats = pd.DataFrame(rows)\n",
+        "print(stats.to_string(index=False))\n",
+        "\n",
+        "# ---------- top 10 words of S1 and S3 ----------\n",
+        "print(\"\\nTop 10 words in S1:\")\n",
+        "for w, c in Counter(S1).most_common(10):\n",
+        "    print(f\"  {w!r:12} {c}\")\n",
+        "\n",
+        "print(\"\\nTop 10 words in S3:\")\n",
+        "for w, c in Counter(S3).most_common(10):\n",
+        "    print(f\"  {w!r:12} {c}\")\n",
+        "\n",
+        "# ---------- Zipf plot for S3: log(rank) vs log(frequency) ----------\n",
+        "freqs = sorted(Counter(S3).values(), reverse=True)\n",
+        "ranks = range(1, len(freqs) + 1)\n",
+        "plt.figure(figsize=(6, 4))\n",
+        "plt.plot([math.log(r) for r in ranks], [math.log(f) for f in freqs], \"o-\")\n",
+        "plt.xlabel(\"log(rank)\")\n",
+        "plt.ylabel(\"log(frequency)\")\n",
+        "plt.title(\"Zipf plot for S3 (final tokens)\")\n",
+        "plt.grid(True)\n",
+        "plt.show()\n",
+        "\n",
+        "# ---------- top 5 bigrams of S1 and S3 ----------\n",
+        "print(\"\\nTop 5 bigrams in S1:\")\n",
+        "for bg, c in Counter(bigrams(S1)).most_common(5):\n",
+        "    print(f\"  {bg}  {c}\")\n",
+        "\n",
+        "print(\"\\nTop 5 bigrams in S3:\")\n",
+        "for bg, c in Counter(bigrams(S3)).most_common(5):\n",
+        "    print(f\"  {bg}  {c}\")"
+      ],
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "          Corpus  Tokens  Unique    TTR\n",
+            " S1 (all tokens)     191      95 0.4974\n",
+            "   S2 (no punct)     160      90 0.5625\n",
+            "      S3 (final)      93      63 0.6774\n",
+            "S4 (S3 + Porter)      93      61 0.6559\n",
+            "\n",
+            "Top 10 words in S1:\n",
+            "  '.'          24\n",
+            "  'the'        12\n",
+            "  'i'          8\n",
+            "  'yesterday'  7\n",
+            "  'it'         6\n",
+            "  'is'         5\n",
+            "  \"n't\"        4\n",
+            "  'matlab'     4\n",
+            "  'worked'     4\n",
+            "  'can'        4\n",
+            "\n",
+            "Top 10 words in S3:\n",
+            "  'yesterday'  7\n",
+            "  \"n't\"        4\n",
+            "  'matlab'     4\n",
+            "  'worked'     4\n",
+            "  'check'      4\n",
+            "  'use'        3\n",
+            "  'mobile'     2\n",
+            "  'hotspot'    2\n",
+            "  'lms'        2\n",
+            "  'since'      2\n"
+          ]
+        },
+        {
+          "output_type": "display_data",
+          "data": {
+            "text/plain": [
+              "<Figure size 600x400 with 1 Axes>"
+            ],
+            "image/png": "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N07sUAAAb731Ft577z3k5OSIHQqR0WESQkSS8sknnyAsLAxyedW/nlQqVYPF0717d3To0AGbN29usGMSNRVMQojIIO7du4dJkyahRYsWsLS0xLBhw3DlyhWtOmvXroWrqyssLS3x9NNPY9myZWjevLlm++3bt/Hrr79ixIgRWvvJZDKsXr0aI0eOhJWVFd577z2UlZVh2rRpcHd3h4WFBTp37owVK1Zo7TdlyhSEhobiww8/hLOzM1q2bIlZs2ZVm8SsW7cOzZs3x759+zRlI0aMwNatW+vw6RBRZZiEEJFBTJkyBadOncKPP/6IhIQECIKA4cOHa77wjx49ihkzZuDll1/G2bNnERwcjPfee0+rjSNHjsDS0hJdu3at0P6CBQvw9NNP49y5c5g6dSrUajXatGmD7du348KFC5g/fz7efPNNfPvtt1r77d+/HykpKdi/fz82btyI6OjoKp+UvGTJErzxxhuIi4vD4MGDNeX+/v44ceIEiouL6/gpEdHDTMQOgIgavytXruDHH3/E0aNH0adPHwDA119/DVdXV8TExGD06NH49NNPMWzYMLz66qsAgE6dOuHYsWP46aefNO1cu3YNjo6OlV6KmTBhAsLCwrTKoqKiNP/v7u6OhIQEfPvttxgzZoymvEWLFli5ciUUCgW6dOmCJ598Evv27cP06dO12nr99dfx1Vdf4eDBg+jWrZvWNhcXF5SUlCA9PR3t2rXT81MiokcxCSGiOrt48SJMTEwQEBCgKWvZsiU6d+6MixcvAgAuX76Mp59+Wms/f39/rSTk/v37MDc3r/QYfn5+FcpWrVqF9evX4/r167h//z5KSkrg7e2tVadbt25QKBSa987Ozjh37pxWnY8++ggFBQU4deoU2rdvX+E4FhYWAIDCwsJKYyMi/fByDBFJhr29Pe7du1fpNisrK633W7duxauvvopp06YhLi4OZ8+eRVhYGEpKSrTqmZqaar2XyWRQq9VaZf3790dZWVmFSznl7t69CwBo1apVrc6HiKrHkRAiqrOuXbuitLQUiYmJmssxd+7cweXLl+Hp6QkA6Ny5M06ePKm136Pve/XqhfT0dNy7dw8tWrSo9pjll35mzpypKUtJSdErfn9/f8yePRtDhw6FiYmJ5pJRufPnz6NNmzawt7fXq30iqhxHQoiozjp27IinnnoK06dPx5EjR/Dbb79h4sSJaN26NZ566ikAwJw5c7B7924sW7YMV65cweeff449e/ZAJpNp2unVqxfs7e1x9OhRnY556tQp7N27F3/++SfefvvtCklNbfTp0we7d+9GVFRUhcXLDh8+jCFDhujdNhFVjkkIERnEhg0b4Ovri3/9618IDAyEIAjYvXu35nJI3759sWbNGixbtgxeXl6IjY3FK6+8ojUHRKFQICwsDF9//XWNx3vhhRfwzDPPYOzYsQgICMCdO3e0RkX00a9fP/z8889466238OmnnwIAioqKEBMTU2EiKxHVnUwQBEHsIIioaZo+fTouXbqEw4cPa8rS09PRrVs3JCUlSeJOlNWrV2Pnzp2Ii4sTOxQio8ORECJqMB9++CF+++03JCcn49NPP8XGjRsxefJkrTpOTk748ssvcf36dZGi1GZqaqoZFSEiw+JICBE1mDFjxuDAgQPIy8tD+/btMWfOHMyYMUPssIhIJExCiIiISBS8HENERESiYBJCREREomASQkRERKJgEkJERESiYBJCREREomASQkRERKJgEkJERESiYBJCREREovh/XaHQZCN7c8cAAAAASUVORK5CYII=\n"
+          },
+          "metadata": {}
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "\n",
+            "Top 5 bigrams in S1:\n",
+            "  ('yesterday', '.')  7\n",
+            "  ('.', 'i')  5\n",
+            "  ('the', 'matlab')  4\n",
+            "  ('.', 'it')  4\n",
+            "  ('it', 'worked')  4\n",
+            "\n",
+            "Top 5 bigrams in S3:\n",
+            "  ('worked', 'yesterday')  4\n",
+            "  ('use', 'mobile')  2\n",
+            "  ('mobile', 'hotspot')  2\n",
+            "  ('hotspot', 'worked')  2\n",
+            "  ('since', 'yesterday')  2\n"
+          ]
+        }
+      ],
+      "id": "y8nvlaBD5RhV"
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "cnpcmyq45RhV"
+      },
+      "source": [
+        "**Observe:** Why does TTR change from S1 to S4 in your data?\n",
+        "\n",
+        "*Your answer:* TTR rises from 0.4974 in S1 to 0.5625 in S2 because removing punctuation drops 31 tokens (mostly the repeated ., which appears 24 times) but only 5 unique types. It rises again to 0.6774 in S3 because removing stopwords (the, i, it, is, to) takes out 67 tokens that repeat heavily, while only 27 types disappear. TTR then falls slightly to 0.6559 in S4 because Porter stemming does not change the token count (93) but merges inflected forms into the same stem, reducing unique types from 63 to 61 (e.g. keep and keeps become keep, time and times become time). So TTR goes up when frequent, low-information tokens are removed, and goes down when variants are collapsed\n"
+      ],
+      "id": "cnpcmyq45RhV"
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "Question 6"
+      ],
+      "metadata": {
+        "id": "-ioEQzbrAbyP"
+      },
+      "id": "-ioEQzbrAbyP"
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "(a) TTR rises from 0.4974 in S1 to 0.5625 in S2 because removing punctuation drops 31 tokens (mostly the repeated ., which appears 24 times) but only 5 unique types. It rises again to 0.6774 in S3 because removing stopwords (the, i, it, is, to) takes out 67 tokens that repeat heavily, while only 27 types disappear. TTR then falls slightly to 0.6559 in S4 because Porter stemming does not change the token count (93) but merges inflected forms into the same stem, reducing unique types from 63 to 61 (e.g. keep and keeps become keep, time and times become time). So TTR goes up when frequent, low-information tokens are removed, and goes down when variants are collapsed\n",
+        "\n",
+        "(b) Example where the tokenizers differ:\n",
+        "\n",
+        "For “I couldn’t connect to the Matlab...” (T03), word_tokenize gives could + n't, while my_tokenize keeps couldn't whole. My pattern treats letters joined by an apostrophe as one word, while NLTK follows Penn Treebank rules and splits the negation clitic. Another is the email it.helpdesk@thapar.edu, which mine keeps as one token while NLTK splits it into it.helpdesk, @, thapar.edu.\n",
+        "\n",
+        "(c) Undesirable stemming:\n",
+        "\n",
+        "Lancaster stems unable to un, which loses nearly all meaning, and projector to project, which turns a device into a verb or a task. Porter produces non-words such as resolv (from resolve) and deadlin.\n",
+        "\n",
+        "(d) POS-aware lemmatization:\n",
+        "\n",
+        "tried (VBD) is lemmatized to try, but Porter and Lancaster give tri, which is not a word. Likewise changed becomes change, while stemmers give chang. The lemmatizer uses the POS tag to apply the correct rule and returns a real dictionary word, so the meaning is preserved."
+      ],
+      "metadata": {
+        "id": "H5xFFhHgAhh_"
+      },
+      "id": "H5xFFhHgAhh_"
+    },
+    {
+      "cell_type": "code",
+      "source": [],
+      "metadata": {
+        "id": "YK4DiQAbAgeS"
+      },
+      "id": "YK4DiQAbAgeS",
+      "execution_count": null,
+      "outputs": []
+    }
+  ],
+  "metadata": {
+    "kernelspec": {
+      "name": "python3",
+      "display_name": "Python 3"
+    },
+    "language_info": {
+      "name": "python"
+    },
+    "colab": {
+      "provenance": [],
+      "include_colab_link": true
+    }
+  },
+  "nbformat": 4,
+  "nbformat_minor": 5
+}
