@@ -1,0 +1,8 @@
+py assistant.py --cnn emotion_cnn.pt
+
+assignment9question2/data/
+assignment9question2/__pycache__/
+assignment9question2/*.npz
+assignment9question2/*.npy
+assignment9question2/*.pt
+assignment9question2/*.joblib
