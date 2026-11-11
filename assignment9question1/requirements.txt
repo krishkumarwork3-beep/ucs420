@@ -1,0 +1,12 @@
+opencv-python-headless>=4.8
+numpy>=1.24
+pillow>=10.0
+pytesseract>=0.3.10     # needs the Tesseract binary installed (see README)
+easyocr>=1.7            # optional, better accuracy on curved/noisy labels (pulls in PyTorch)
+rapidfuzz>=3.0          # optional, fast fuzzy matching of drug names
+streamlit>=1.30
+gTTS>=2.5               # online text-to-speech
+pyttsx3>=2.90           # offline text-to-speech fallback
+requests>=2.31
+pandas>=2.0
+pytest>=7.0
