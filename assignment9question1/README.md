@@ -59,6 +59,22 @@ Baseline (Tesseract, original 45-image test split): brand found in raw OCR text 
 name correct 8.9% - the original images are tiny (~290x300 px). The 2 added photos (1280 px) are
 read well, so image resolution is the main factor. Results go to `<split>_results[_crop]_<backend>.csv`.
 
+## GPU: train the pack detector and run the pipeline
+```bash
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121   # match your CUDA, see pytorch.org
+pip install ultralytics easyocr
+python -c "import torch; print(torch.cuda.is_available())"                        # must print True
+
+python scripts/coco_to_yolo.py datasets/medicine_v1i_coco_plus --out datasets/yolo --single-class
+yolo detect train data=datasets/yolo/data.yaml model=yolo11s.pt imgsz=640 epochs=100 batch=16 device=0 workers=2
+yolo detect val   model=runs/detect/train/weights/best.pt data=datasets/yolo/data.yaml split=test device=0
+
+python scripts/detect_and_read.py photo.jpg --weights runs/detect/train/weights/best.pt --device 0
+python cli.py photo.jpg --backend easyocr --gpu --ask "when does it expire?"
+streamlit run app.py        # EasyOCR uses the GPU automatically when CUDA is available
+```
+Tesseract is CPU-only; the GPU speeds up EasyOCR and YOLO.
+
 ## Limitations
 - OCR struggles with heavy glare, curved bottles, tiny print; use the editable-text box in the UI.
 - Dates are read as dd/mm/yyyy; month-only dates are treated as the last day of that month.

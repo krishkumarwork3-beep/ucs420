@@ -1,0 +1,19 @@
+# Training outputs (large, can be regenerated)
+runs/
+yolo11s.pt
+yolo*.pt
+
+# YOLO-format copy of the dataset (rebuilt by scripts/coco_to_yolo.py)
+datasets/yolo/
+
+# Python / tooling
+__pycache__/
+*.pyc
+.pytest_cache/
+venv/
+.venv/
+
+# Generated files
+summary.mp3
+summary.wav
+*_results*.csv

@@ -11,9 +11,11 @@ DISCLAIMER = ("Automated reading - verify with a doctor or pharmacist before tak
 
 
 class MedicineLabelAssistant:
-    def __init__(self, ocr_backend: str = "auto", drug_db_path: str | None = None):
+    def __init__(self, ocr_backend: str = "auto", drug_db_path: str | None = None,
+                 gpu: bool | None = None):
         self.db = DrugDB(drug_db_path)
         self._ocr_backend = ocr_backend
+        self._gpu = gpu
         self._ocr = None
         self.info: LabelInfo | None = None
 
@@ -21,7 +23,7 @@ class MedicineLabelAssistant:
     def ocr(self):
         if self._ocr is None:  # lazy: importing OCR libs is slow
             from .ocr import OCREngine
-            self._ocr = OCREngine(self._ocr_backend)
+            self._ocr = OCREngine(self._ocr_backend, gpu=self._gpu)
         return self._ocr
 
     # ---- perception + understanding

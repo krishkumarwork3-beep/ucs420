@@ -23,10 +23,23 @@ def _score(text: str, conf: float) -> float:
 
 
 class OCREngine:
-    def __init__(self, backend: str = "auto", languages: tuple[str, ...] = ("en",)):
+    def __init__(self, backend: str = "auto", languages: tuple[str, ...] = ("en",),
+                 gpu: bool | None = None):
         self.languages = languages
+        self.gpu = self._resolve_gpu(gpu)
         self._easy = None
         self.backend = self._pick_backend(backend)
+
+    @staticmethod
+    def _resolve_gpu(gpu: bool | None) -> bool:
+        """None = use the GPU if PyTorch can see one. Only EasyOCR uses it (Tesseract is CPU-only)."""
+        if gpu is not None:
+            return gpu
+        try:
+            import torch
+            return torch.cuda.is_available()
+        except Exception:
+            return False
 
     # ---- backend selection -------------------------------------------------
     def _pick_backend(self, backend: str) -> str:
@@ -70,7 +83,7 @@ class OCREngine:
     def _run_easyocr(self, img: np.ndarray) -> tuple[str, float]:
         if self._easy is None:
             import easyocr
-            self._easy = easyocr.Reader(list(self.languages), gpu=False, verbose=False)
+            self._easy = easyocr.Reader(list(self.languages), gpu=self.gpu, verbose=False)
         results = self._easy.readtext(img)
         if not results:
             return "", 0.0

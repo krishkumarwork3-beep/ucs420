@@ -10,13 +10,15 @@ def main():
     ap.add_argument("image", nargs="?", help="Path to label image")
     ap.add_argument("--text", help="Skip OCR and analyse this text instead")
     ap.add_argument("--backend", default="auto", choices=["auto", "easyocr", "tesseract"])
+    ap.add_argument("--gpu", dest="gpu", action="store_true", default=None, help="force GPU (EasyOCR)")
+    ap.add_argument("--cpu", dest="gpu", action="store_false", help="force CPU")
     ap.add_argument("--db", help="Path to drug-name CSV (default data/drugs.csv or sample)")
     ap.add_argument("--json", action="store_true", help="Print structured JSON")
     ap.add_argument("--speak", action="store_true", help="Save spoken summary to summary.mp3")
     ap.add_argument("--ask", help="Ask a question about the label")
     a = ap.parse_args()
 
-    bot = MedicineLabelAssistant(a.backend, a.db)
+    bot = MedicineLabelAssistant(a.backend, a.db, a.gpu)
     if a.text:
         info = bot.read_text(a.text)
     elif a.image:
